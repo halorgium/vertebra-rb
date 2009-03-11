@@ -284,9 +284,8 @@ module Vertebra
     end
 
     def direct_op(op_type, to, *args)
-      op = Vertebra::Op.new(op_type, args)
       logger.debug("#direct_op #{op_type} #{to} #{args.inspect} for #{self}")
-      Vertebra::Protocol::Client.start(self, op, to)
+      Vertebra::Protocol::Client.start(self, op_type, to, SousChef.prepare(*args).args)
     end
 
     def op(op_type, to, *args)
@@ -340,6 +339,26 @@ module Vertebra
       enqueue_synapse(discoverer)
 
       discoverer
+    end
+
+    def send_stanza(stanza)
+      iq = stanza.to_iq
+      case stanza
+      when Stanzas::Init
+        logger.debug "Assigning client to token #{stanza.token}"
+        clients[stanza.token] = stanza.client
+      else
+        puts "WOW: #{stanza.class}"
+      end
+
+      requestor = Vertebra::Synapse.new
+      requestor[:name] = 'requestor'
+      requestor.condition {connection_is_open_and_authenticated?}
+      requestor.callback do
+        logger.debug "in requestor callback"
+        send_iq(stanza.to_iq)
+      end
+      enqueue_synapse(requestor)
     end
 
     def send_iq(iq)

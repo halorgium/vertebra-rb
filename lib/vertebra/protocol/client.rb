@@ -46,17 +46,15 @@ module Vertebra
     class Client
       DONE_STATES = [:commit, :authfail, :error]
 
-      attr_reader :state, :to
+      attr_reader :state, :type, :to, :args
 
-      def self.start(agent, op, to)
-        new(agent, op, to).start
+      def self.start(agent, type, to, args)
+        new(agent, type, to, args).start
       end
 
-      def initialize(agent, op, to)
-        @agent = agent
+      def initialize(agent, type, to, args)
+        @agent, @type, @to, @args = agent, type, to, args
         @state = :new
-        @to = to
-        @op = op
       end
 
       def start
@@ -76,18 +74,9 @@ module Vertebra
       end
 
       def make_request
-        requestor = Vertebra::Synapse.new
-        requestor[:name] = 'requestor'
-        iq = @op.to_iq(@to, @agent.jid)
-        @agent.add_client(@op.token, self)
-        logger.debug "Assigning client to token #{@op.token}"
-        requestor.condition {@agent.connection_is_open_and_authenticated?}
-        requestor.callback do
-          logger.debug "in requestor callback"
-          @last_message_sent = iq
-          @agent.send_iq(iq)
-        end
-        @agent.enqueue_synapse(requestor)
+        init = Vertebra::Stanzas::Init.new(self, type, to, args)
+        @last_message_sent = init
+        @agent.send_stanza(init)
       end
 
       def is_ready

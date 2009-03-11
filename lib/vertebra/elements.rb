@@ -17,10 +17,12 @@
 
 module Vertebra
   class BaseElement < Jabber::XMPPElement
-    def initialize(tok = nil)
+    def initialize(client, token)
       super()
-      add_attribute('token', tok)
+      @client = client
+      add_attribute('token', token)
     end
+    attr_reader :client
 
     def token
       attributes['token']
@@ -62,23 +64,40 @@ module Vertebra
     name_xmlns 'error', 'http://xmlschema.engineyard.com/agent/api'
   end
 
-  class Operation < BaseElement
+  module Stanzas
+  class Init < BaseElement
     name_xmlns 'op', 'http://xmlschema.engineyard.com/agent/api'
     force_xmlns true
 
-    def initialize(type = nil, token = '')
-      super()
-      add_attribute('type', type.to_s)
-      add_attribute('token', token)
-    end
+    def initialize(client, type, to, args)
+      super(client, Vertebra.gen_token)
+      @type = Vertebra::Resource.new(type.to_s)
+      @to = to
+      @args = args
 
-    def token=(val)
-      attributes['token'] = val
+      pp [@type, @to, @args]
+
+      add_attribute('type', @type.to_s)
     end
 
     def type
       attributes['type']
     end
+
+    def to_iq
+      iq = LM::Message.new(@to, LM::MessageType::IQ, type)
+
+      iq.node.set_attribute('xml:lang','en')
+      iq.node.add_child(self)
+      op_lm = iq.node.get_child(name)
+
+      Vertebra::Marshal.encode(@args).children.each do |el|
+        op_lm.add_child el
+      end
+      logger.debug "CREATED IQ #{iq.node.to_s} with class #{iq.class}"
+      iq
+    end
+  end
   end
 
   class Res < Jabber::XMPPElement
